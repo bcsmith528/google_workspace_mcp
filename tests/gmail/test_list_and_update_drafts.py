@@ -115,6 +115,36 @@ async def test_list_gmail_drafts_empty_account():
 
 
 @pytest.mark.asyncio
+async def test_update_keeps_threaded_draft_in_its_thread():
+    long_id = "<DM4PR18MB433358AD2D8F9C1D8C910144ED962@DM4PR18MB4333.namprd18.prod.outlook.com>"
+    existing = _existing_draft(
+        {
+            "Subject": "Re: Case Status",
+            "From": "user@example.com",
+            "To": "rena@example.org",
+            "In-Reply-To": long_id,
+            "References": long_id,
+        }
+    )
+    existing["message"]["threadId"] = "t_parent"
+    mock_service = _service_with(existing)
+
+    await _unwrap(update_gmail_draft)(
+        service=mock_service,
+        user_google_email="user@example.com",
+        draft_id="r1",
+        body="New body text",
+        include_signature=False,
+    )
+
+    call, parsed = _sent_update(mock_service)
+    assert call.kwargs["body"]["message"]["threadId"] == "t_parent"
+    raw_text = base64.urlsafe_b64decode(call.kwargs["body"]["message"]["raw"]).decode()
+    assert "=?utf-8?" not in raw_text
+    assert parsed["In-Reply-To"] == long_id
+
+
+@pytest.mark.asyncio
 async def test_update_carries_forward_omitted_fields_and_replaces_body():
     mock_service = _service_with(
         _existing_draft(

@@ -565,7 +565,39 @@ async def test_draft_gmail_message_autofills_reply_headers_from_thread():
         "References: <msg1@example.com> <msg2@example.com> <msg3@example.com>"
         in raw_text
     )
-    assert "threadId" not in create_kwargs["body"]["message"]
+    assert create_kwargs["body"]["message"]["threadId"] == "thread123"
+
+
+@pytest.mark.asyncio
+async def test_draft_gmail_message_keeps_long_message_ids_unencoded():
+    """Outlook Message-IDs run past 78 chars; they must not be RFC 2047-encoded."""
+    long_id = "<DM4PR18MB433358AD2D8F9C1D8C910144ED962@DM4PR18MB4333.namprd18.prod.outlook.com>"
+    root_id = "<CAPVUbyoL-f-xUvmZj5FCc3hbq02u5W=phZ2vZsaoEnf89LJpPg@mail.gmail.com>"
+    mock_service = Mock()
+    mock_service.users().drafts().create().execute.return_value = {"id": "draft_long"}
+
+    await _unwrap(draft_gmail_message)(
+        service=mock_service,
+        user_google_email="user@example.com",
+        to="recipient@example.com",
+        subject="Re: Your 2025 Tax Returns Are Ready for Review",
+        body="Thanks.",
+        thread_id="thread_long",
+        in_reply_to=long_id,
+        references=f"{root_id} {long_id}",
+        include_signature=False,
+    )
+
+    create_kwargs = (
+        mock_service.users.return_value.drafts.return_value.create.call_args.kwargs
+    )
+    raw_text = base64.urlsafe_b64decode(create_kwargs["body"]["message"]["raw"]).decode(
+        "utf-8", errors="ignore"
+    )
+    assert "=?utf-8?" not in raw_text
+    assert f"In-Reply-To: {long_id}" in raw_text
+    assert f"References: {root_id} {long_id}" in raw_text
+    assert create_kwargs["body"]["message"]["threadId"] == "thread_long"
 
 
 @pytest.mark.asyncio

@@ -7,13 +7,18 @@ Branch `citadel/v1.22.0-drafts` = upstream tag `v1.22.0` plus two Gmail tools:
 
 No delete tool on purpose: `drafts.delete` bypasses Trash.
 
+Threading fix (`1.22.0-drafts3`, 2026-10-05): reply drafts now land inside their thread. Two changes in `gmail/gmail_tools.py`:
+
+- Messages serialize with `max_line_length=998` (RFC 5322) instead of SMTP's 78. At 78, Python RFC 2047-encoded any Message-ID longer than a line (Outlook IDs always are), so `In-Reply-To`/`References` stopped matching and Gmail filed the reply as a new conversation.
+- `draft_gmail_message` and `update_gmail_draft` set `message.threadId` again when reply headers are present. Upstream removed it for #845 (drafts hidden in the Gmail UI); those reports had the mangled headers too. With intact headers, verified live: the draft sits in the thread and shows in Drafts and Inbox.
+
 Both instances on CT210 run it: `gws-mcp-lan` (`/opt/gws-lan`, Claude Code + Jarvis) and `gws-mcp` (`/home/ubuntu/gws-mcp`, claude.ai connectors). Scope needed is `gmail.compose`, which all four stored accounts already have.
 
 ## Build and deploy (on CT210)
 
 ```
 cd /opt/gws-drafts-build            # this repo's Dockerfile.citadel, gmail/gmail_tools.py, core/tool_tiers.yaml
-docker build -f Dockerfile.citadel -t gws-mcp-citadel:<tag> .    # running: 1.22.0-drafts2
+docker build -f Dockerfile.citadel -t gws-mcp-citadel:<tag> .    # running: 1.22.0-drafts3
 # set image: gws-mcp-citadel:<tag> in both compose files, then:
 cd /opt/gws-lan && docker compose up -d
 cd /home/ubuntu/gws-mcp && docker compose -p gwsmcp -f docker-compose.ct.yml up -d

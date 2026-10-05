@@ -60,6 +60,12 @@ from gmail.gmail_helpers import (
     _signature_fetch_tool_error,
 )
 
+# RFC 5322 allows 998-character header lines. Generating at SMTP's 78 makes Python
+# RFC 2047-encode any unbreakable token longer than that, and Outlook-style
+# Message-IDs are. An encoded In-Reply-To/References no longer matches the parent,
+# so Gmail files the reply as a new conversation (and hides threadId'd drafts).
+_RFC5322_POLICY = SMTP.clone(max_line_length=998)
+
 logger = logging.getLogger(__name__)
 
 GMAIL_BATCH_SIZE = 25
@@ -1228,7 +1234,9 @@ def _prepare_gmail_message(
             continue
 
     # Encode message
-    raw_message = base64.urlsafe_b64encode(message.as_bytes(policy=SMTP)).decode()
+    raw_message = base64.urlsafe_b64encode(
+        message.as_bytes(policy=_RFC5322_POLICY)
+    ).decode()
 
     return raw_message, thread_id, attached_count, attachment_errors
 
@@ -2602,9 +2610,13 @@ async def draft_gmail_message(
             f"{details}"
         )
 
-    # Create a draft instead of sending. Keep reply threading in the raw
-    # headers; setting message.threadId here can create Gmail UI-hidden drafts.
+    # Create a draft instead of sending. Gmail only files an API-created draft into
+    # a thread when threadId is set AND In-Reply-To/References match a message in
+    # it. The "hidden draft" reports (upstream #845) came from threadId plus
+    # RFC 2047-mangled headers; with _RFC5322_POLICY the headers stay intact.
     draft_body = {"message": {"raw": raw_message}}
+    if _thread_id_final and in_reply_to:
+        draft_body["message"]["threadId"] = _thread_id_final
 
     # Create the draft
     created_draft = await asyncio.to_thread(
@@ -2949,12 +2961,16 @@ async def update_gmail_draft(
             f"{details}"
         )
 
-    # Same rule as draft_gmail_message: threading lives in the raw headers, never
-    # in message.threadId, which can create Gmail UI-hidden drafts.
+    # Same rule as draft_gmail_message: keep the draft in its thread by passing the
+    # existing threadId alongside the carried-forward reply headers.
+    update_message = {"raw": raw_message}
+    existing_thread_id = existing_message.get("threadId")
+    if existing_thread_id and in_reply_to:
+        update_message["threadId"] = existing_thread_id
     updated = await asyncio.to_thread(
         service.users()
         .drafts()
-        .update(userId="me", id=draft_id, body={"message": {"raw": raw_message}})
+        .update(userId="me", id=draft_id, body={"message": update_message})
         .execute,
         num_retries=GOOGLE_API_WRITE_RETRIES,
     )

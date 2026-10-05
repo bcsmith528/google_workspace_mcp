@@ -1,0 +1,6 @@
+# Citadel (CT210) build: the exact upstream v1.22.0 image both GWS instances ran,
+# plus list_gmail_drafts + update_gmail_draft. Only the two changed files are swapped
+# in, so nothing else about the runtime moves. Rollback = repin the upstream digest.
+FROM ghcr.io/taylorwilsdon/google_workspace_mcp@sha256:4841e2b635a0e29cbe58472e69dc0b0bc1caa69b90834f51106c843763156837
+COPY gmail/gmail_tools.py /app/gmail/gmail_tools.py
+COPY core/tool_tiers.yaml /app/core/tool_tiers.yaml

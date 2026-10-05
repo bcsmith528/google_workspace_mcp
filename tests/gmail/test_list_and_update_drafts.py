@@ -96,6 +96,9 @@ async def test_list_gmail_drafts_returns_formatted_drafts():
     assert "alice@example.com" in result
     assert "Draft ID: r456" in result
     assert "Second draft" in result
+    # drafts.get has no metadataHeaders parameter (only messages.get does); the
+    # live API rejects it, so guard against it creeping back in.
+    assert "metadataHeaders" not in mock_service.users().drafts().get.call_args.kwargs
 
 
 @pytest.mark.asyncio

@@ -2696,19 +2696,13 @@ async def list_gmail_drafts(
         + ":\n"
     ]
 
-    metadata_headers = ["Subject", "From", "To", "Cc", "Date"]
     for idx, draft_stub in enumerate(drafts, 1):
         draft_id = draft_stub.get("id")
         try:
             draft_full = await asyncio.to_thread(
                 service.users()
                 .drafts()
-                .get(
-                    userId="me",
-                    id=draft_id,
-                    format="metadata",
-                    metadataHeaders=metadata_headers,
-                )
+                .get(userId="me", id=draft_id, format="metadata")
                 .execute
             )
             message = draft_full.get("message", {})
